@@ -1,7 +1,6 @@
 buildscript {
-    // Keep the Kotlin Gradle plugin aligned with the stdlib version pulled by
-    // the Flutter/AndroidX dependency graph to avoid duplicate stdlib classes.
-    ext.kotlin_version = '1.8.0'
+    // Keep the Kotlin Gradle plugin aligned with the host app toolchain.
+    ext.kotlin_version = '1.8.10'
     repositories {
         google()
         mavenCentral()
