@@ -8,20 +8,7 @@ Android artifacts are resolved from the GitHub repository-backed Maven path:
 
 - `https://raw.githubusercontent.com/601652267/printMaven/main`
 
-The repository is currently private, so Android builds need GitHub credentials.
-Provide them in either of these ways:
-
-```bash
-export HOUSEPRINT_MAVEN_USER=your_github_username
-export HOUSEPRINT_MAVEN_TOKEN=your_github_token
-```
-
-Or add them to the consuming app's `android/local.properties`:
-
-```properties
-houseprint.maven.user=your_github_username
-houseprint.maven.token=your_github_token
-```
+The repository is public, so Android builds do not need GitHub credentials.
 
 ## Getting Started
 

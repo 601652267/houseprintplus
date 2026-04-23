@@ -28,30 +28,7 @@ plugins {
     id "org.jetbrains.kotlin.android" version "1.8.10" apply false
 }
 
-def localProperties = new Properties()
-def localPropertiesFile = file("local.properties")
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withInputStream { localProperties.load(it) }
-}
-
 def houseprintGitMavenRepo = uri("https://raw.githubusercontent.com/601652267/printMaven/main")
-def houseprintMavenUser = System.getenv("HOUSEPRINT_MAVEN_USER")
-        ?: localProperties.getProperty("houseprint.maven.user")
-def houseprintMavenToken = System.getenv("HOUSEPRINT_MAVEN_TOKEN")
-        ?: localProperties.getProperty("houseprint.maven.token")
-
-def configureHouseprintGitMavenRepository = { repo ->
-    repo.url = houseprintGitMavenRepo
-    if (houseprintMavenUser != null && houseprintMavenToken != null) {
-        repo.credentials {
-            username = houseprintMavenUser
-            password = houseprintMavenToken
-        }
-        repo.authentication {
-            basic(org.gradle.authentication.http.BasicAuthentication)
-        }
-    }
-}
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
@@ -65,8 +42,8 @@ dependencyResolutionManagement {
         // Android-SpinKit
         maven { url 'https://jitpack.io' }
 
-        // Private GitHub repository that stores the Maven directory structure.
-        maven configureHouseprintGitMavenRepository
+        // Public GitHub repository that stores the Maven directory structure.
+        maven { url houseprintGitMavenRepo }
 
     }
 }

@@ -1,35 +1,7 @@
-import org.gradle.authentication.http.BasicAuthentication
-
 group 'com.example.houseprintplus'
 version '1.0'
 
 def houseprintGitMavenRepo = uri("https://raw.githubusercontent.com/601652267/printMaven/main")
-def houseprintCredentials = new Properties()
-def rootLocalPropertiesFile = rootProject.file("local.properties")
-if (rootLocalPropertiesFile.exists()) {
-    rootLocalPropertiesFile.withInputStream { inputStream ->
-        houseprintCredentials.load(inputStream)
-    }
-}
-def houseprintMavenUser = project.findProperty("houseprintMavenUser")
-        ?: System.getenv("HOUSEPRINT_MAVEN_USER")
-        ?: houseprintCredentials.getProperty("houseprint.maven.user")
-def houseprintMavenToken = project.findProperty("houseprintMavenToken")
-        ?: System.getenv("HOUSEPRINT_MAVEN_TOKEN")
-        ?: houseprintCredentials.getProperty("houseprint.maven.token")
-
-def configureHouseprintGitMavenRepository = { repo ->
-    repo.url = houseprintGitMavenRepo
-    if (houseprintMavenUser != null && houseprintMavenToken != null) {
-        repo.credentials {
-            username = houseprintMavenUser
-            password = houseprintMavenToken
-        }
-        repo.authentication {
-            basic(BasicAuthentication)
-        }
-    }
-}
 
 buildscript {
     repositories {
@@ -47,14 +19,14 @@ if (rootProject == project) {
         repositories {
             google()
             mavenCentral()
-            maven configureHouseprintGitMavenRepository
+            maven { url houseprintGitMavenRepo }
         }
     }
 
     repositories {
         google()
         mavenCentral()
-        maven configureHouseprintGitMavenRepository
+        maven { url houseprintGitMavenRepo }
     }
 }
 
