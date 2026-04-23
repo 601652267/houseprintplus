@@ -89,6 +89,8 @@ class MethodChannelHouseprintplus extends HouseprintplusPlatform {
     required String subtitle,
     double labelWidthMm = 50,
     double labelHeightMm = 30,
+    double? titleFontSizeMm,
+    double? subtitleFontSizeMm,
   }) {
     return methodChannel.invokeMethod<void>(
       'printQrLabel',
@@ -98,6 +100,8 @@ class MethodChannelHouseprintplus extends HouseprintplusPlatform {
         'subtitle': subtitle,
         'labelWidthMm': labelWidthMm,
         'labelHeightMm': labelHeightMm,
+        'titleFontSizeMm': titleFontSizeMm,
+        'subtitleFontSizeMm': subtitleFontSizeMm,
       },
     );
   }

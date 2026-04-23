@@ -6,6 +6,8 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Layout;
+import android.text.StaticLayout;
 import android.text.TextUtils;
 import android.text.TextPaint;
 
@@ -87,7 +89,9 @@ public class HouseprintPrintManager {
             @NonNull String title,
             @NonNull String subtitle,
             double labelWidthMm,
-            double labelHeightMm
+            double labelHeightMm,
+            Double titleFontSizeMm,
+            Double subtitleFontSizeMm
     ) {
         if (TextUtils.isEmpty(qrContent)) {
             throw new IllegalArgumentException("QR content cannot be empty.");
@@ -107,7 +111,16 @@ public class HouseprintPrintManager {
         }
 
         HouseprintBluetoothManager.PrinterSettings settings = bluetoothManager.getCurrentPrinterSettings();
-        executorService.execute(() -> startQrPrint(qrContent, title, subtitle, labelWidthMm, labelHeightMm, settings));
+        executorService.execute(() -> startQrPrint(
+                qrContent,
+                title,
+                subtitle,
+                labelWidthMm,
+                labelHeightMm,
+                titleFontSizeMm,
+                subtitleFontSizeMm,
+                settings
+        ));
     }
 
     /**
@@ -134,6 +147,8 @@ public class HouseprintPrintManager {
             @NonNull String subtitle,
             double labelWidthMm,
             double labelHeightMm,
+            Double titleFontSizeMm,
+            Double subtitleFontSizeMm,
             @NonNull HouseprintBluetoothManager.PrinterSettings settings
     ) {
         Bitmap labelBitmap = null;
@@ -141,11 +156,26 @@ public class HouseprintPrintManager {
             Map<String, Object> basePayload = buildPrintPayload(settings);
             basePayload.put("labelWidthMm", labelWidthMm);
             basePayload.put("labelHeightMm", labelHeightMm);
+            if (titleFontSizeMm != null) {
+                basePayload.put("titleFontSizeMm", titleFontSizeMm);
+            }
+            if (subtitleFontSizeMm != null) {
+                basePayload.put("subtitleFontSizeMm", subtitleFontSizeMm);
+            }
 
             emitPrintStatus("preparing", "Preparing print data.", basePayload);
             emitPrintStatus("generatingQr", "Generating QR code.", basePayload);
             emitPrintStatus("renderingLayout", "Rendering print layout.", basePayload);
-            labelBitmap = createLabelBitmap(qrContent, title, subtitle, (float) labelWidthMm, (float) labelHeightMm, settings);
+            labelBitmap = createLabelBitmap(
+                    qrContent,
+                    title,
+                    subtitle,
+                    (float) labelWidthMm,
+                    (float) labelHeightMm,
+                    titleFontSizeMm,
+                    subtitleFontSizeMm,
+                    settings
+            );
             submitBitmapForPrinting(labelBitmap, (float) labelWidthMm, (float) labelHeightMm, settings);
         } catch (Exception exception) {
             recycleBitmap(labelBitmap);
@@ -235,6 +265,8 @@ public class HouseprintPrintManager {
             @NonNull String subtitle,
             float labelWidthMm,
             float labelHeightMm,
+            Double titleFontSizeMm,
+            Double subtitleFontSizeMm,
             @NonNull HouseprintBluetoothManager.PrinterSettings settings
     ) throws WriterException {
         float multiple = settings.getPrintMultiple() > 0 ? settings.getPrintMultiple() : 8.0f;
@@ -259,28 +291,83 @@ public class HouseprintPrintManager {
         TextPaint titlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         titlePaint.setColor(Color.BLACK);
         titlePaint.setFakeBoldText(true);
-        titlePaint.setTextSize(bitmapHeight * 0.22f);
+        titlePaint.setTextSize(resolveTextSize(titleFontSizeMm, bitmapHeight * 0.22f, multiple));
 
         TextPaint subtitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         subtitlePaint.setColor(Color.DKGRAY);
-        subtitlePaint.setTextSize(bitmapHeight * 0.16f);
+        subtitlePaint.setTextSize(resolveTextSize(subtitleFontSizeMm, bitmapHeight * 0.16f, multiple));
 
-        CharSequence titleText = TextUtils.ellipsize(title, titlePaint, textWidth, TextUtils.TruncateAt.END);
-        CharSequence subtitleText = TextUtils.ellipsize(subtitle, subtitlePaint, textWidth, TextUtils.TruncateAt.END);
+        int textAreaTop = padding;
+        int textAreaHeight = Math.max(bitmapHeight - (padding * 2), 1);
+        int lineGap = Math.max(JCPrintApi.mmToPixel(0.6f, multiple), 2);
 
-        Paint.FontMetrics titleMetrics = titlePaint.getFontMetrics();
-        Paint.FontMetrics subtitleMetrics = subtitlePaint.getFontMetrics();
-        float titleHeight = titleMetrics.descent - titleMetrics.ascent;
-        float subtitleHeight = subtitleMetrics.descent - subtitleMetrics.ascent;
-        float lineGap = Math.max(bitmapHeight * 0.06f, 8.0f);
-        float blockHeight = titleHeight + lineGap + subtitleHeight;
-        float blockTop = (bitmapHeight - blockHeight) / 2.0f;
-        float titleBaseline = blockTop - titleMetrics.ascent;
-        float subtitleBaseline = blockTop + titleHeight + lineGap - subtitleMetrics.ascent;
+        StaticLayout titleLayout = createStaticLayout(title, titlePaint, textWidth);
+        StaticLayout subtitleLayout = createStaticLayout(subtitle, subtitlePaint, textWidth);
+        int titleHeight = Math.max(titleLayout.getHeight(), 0);
+        int subtitleHeight = Math.max(subtitleLayout.getHeight(), 0);
+        int totalTextBlockHeight = titleHeight + lineGap + subtitleHeight;
+        float blockTop = textAreaTop + Math.max((textAreaHeight - totalTextBlockHeight) / 2.0f, 0.0f);
 
-        canvas.drawText(titleText, 0, titleText.length(), textStartX, titleBaseline, titlePaint);
-        canvas.drawText(subtitleText, 0, subtitleText.length(), textStartX, subtitleBaseline, subtitlePaint);
+        drawStackedTextLayouts(
+                canvas,
+                titleLayout,
+                subtitleLayout,
+                textStartX,
+                blockTop,
+                textWidth,
+                textAreaTop,
+                textAreaHeight,
+                lineGap
+        );
         return labelBitmap;
+    }
+
+    private float resolveTextSize(Double textSizeMm, float fallbackSizePx, float printMultiple) {
+        if (textSizeMm == null || textSizeMm <= 0) {
+            return fallbackSizePx;
+        }
+        return Math.max(JCPrintApi.mmToPixel(textSizeMm.floatValue(), printMultiple), 1);
+    }
+
+    @NonNull
+    private StaticLayout createStaticLayout(
+            @NonNull String text,
+            @NonNull TextPaint textPaint,
+            int textWidth
+    ) {
+        return new StaticLayout(
+                text,
+                textPaint,
+                Math.max(textWidth, 1),
+                Layout.Alignment.ALIGN_NORMAL,
+                1.1f,
+                0.0f,
+                false
+        );
+    }
+
+    private void drawStackedTextLayouts(
+            @NonNull Canvas canvas,
+            @NonNull StaticLayout titleLayout,
+            @NonNull StaticLayout subtitleLayout,
+            int left,
+            float top,
+            int width,
+            int clipTop,
+            int clipHeight,
+            int lineGap
+    ) {
+        int safeWidth = Math.max(width, 1);
+        int safeClipHeight = Math.max(clipHeight, 1);
+        float subtitleTop = top + titleLayout.getHeight() + lineGap;
+
+        canvas.save();
+        canvas.clipRect(left, clipTop, left + safeWidth, clipTop + safeClipHeight);
+        canvas.translate(left, top);
+        titleLayout.draw(canvas);
+        canvas.translate(0.0f, subtitleTop - top);
+        subtitleLayout.draw(canvas);
+        canvas.restore();
     }
 
     @NonNull

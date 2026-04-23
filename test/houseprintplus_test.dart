@@ -54,6 +54,8 @@ class MockHouseprintplusPlatform
     required String subtitle,
     double labelWidthMm = 50,
     double labelHeightMm = 30,
+    double? titleFontSizeMm,
+    double? subtitleFontSizeMm,
   }) async {}
 
   @override

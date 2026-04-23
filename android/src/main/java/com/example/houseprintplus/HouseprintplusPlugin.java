@@ -99,7 +99,17 @@ public class HouseprintplusPlugin implements
 
           double labelWidthMm = getDoubleArgument(call, "labelWidthMm", 50.0d);
           double labelHeightMm = getDoubleArgument(call, "labelHeightMm", 30.0d);
-          printManager.printQrLabel(qrContent, title, subtitle, labelWidthMm, labelHeightMm);
+          Double titleFontSizeMm = getNullableDoubleArgument(call, "titleFontSizeMm");
+          Double subtitleFontSizeMm = getNullableDoubleArgument(call, "subtitleFontSizeMm");
+          printManager.printQrLabel(
+              qrContent,
+              title,
+              subtitle,
+              labelWidthMm,
+              labelHeightMm,
+              titleFontSizeMm,
+              subtitleFontSizeMm
+          );
           result.success(null);
           return;
         case "cancelPrintJob":
@@ -196,6 +206,11 @@ public class HouseprintplusPlugin implements
   private double getDoubleArgument(@NonNull MethodCall call, @NonNull String key, double fallbackValue) {
     Number value = call.argument(key);
     return value == null ? fallbackValue : value.doubleValue();
+  }
+
+  private Double getNullableDoubleArgument(@NonNull MethodCall call, @NonNull String key) {
+    Number value = call.argument(key);
+    return value == null ? null : value.doubleValue();
   }
 
   private void emitStatus(@NonNull Map<String, Object> status) {

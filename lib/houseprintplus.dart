@@ -43,6 +43,8 @@ class Houseprintplus {
     required String subtitle,
     double labelWidthMm = 50,
     double labelHeightMm = 30,
+    double? titleFontSizeMm,
+    double? subtitleFontSizeMm,
   }) {
     return HouseprintplusPlatform.instance.printQrLabel(
       qrContent: qrContent,
@@ -50,6 +52,8 @@ class Houseprintplus {
       subtitle: subtitle,
       labelWidthMm: labelWidthMm,
       labelHeightMm: labelHeightMm,
+      titleFontSizeMm: titleFontSizeMm,
+      subtitleFontSizeMm: subtitleFontSizeMm,
     );
   }
 

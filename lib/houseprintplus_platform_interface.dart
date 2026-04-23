@@ -66,6 +66,8 @@ abstract class HouseprintplusPlatform extends PlatformInterface {
     required String subtitle,
     double labelWidthMm = 50,
     double labelHeightMm = 30,
+    double? titleFontSizeMm,
+    double? subtitleFontSizeMm,
   }) {
     throw UnimplementedError('printQrLabel() has not been implemented.');
   }
