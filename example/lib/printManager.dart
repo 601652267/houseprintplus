@@ -280,6 +280,51 @@ class printManager extends ChangeNotifier {
     }
   }
 
+  /// 发起“二维码在上，title 在下，整体垂直居中”的标签打印。
+  Future<void> printQrTitleCenteredLabel({
+    required String qrContent,
+    required String title,
+    double labelWidthMm = 50,
+    double labelHeightMm = 30,
+    double? titleFontSizeMm,
+  }) async {
+    await setUp();
+
+    if (!_canUse) {
+      return;
+    }
+
+    if (!hasConnectedDevice || !_canPrint) {
+      _recordError(
+        type: HouseprintStatusType.print,
+        message: '请先连接蓝牙设备后再打印。',
+        payload: <String, dynamic>{},
+      );
+      return;
+    }
+
+    clearError();
+    _isPrinting = true;
+    notifyListeners();
+
+    try {
+      await _printer.printQrTitleCenteredLabel(
+        qrContent: qrContent,
+        title: title,
+        labelWidthMm: labelWidthMm,
+        labelHeightMm: labelHeightMm,
+        titleFontSizeMm: titleFontSizeMm,
+      );
+    } on PlatformException catch (error) {
+      _isPrinting = false;
+      _recordError(
+        type: HouseprintStatusType.print,
+        message: error.message ?? '打印失败。',
+        payload: <String, dynamic>{},
+      );
+    }
+  }
+
   /// 判断设备是否是当前连接设备。
   bool isConnectedDevice(String? address) {
     if (address == null || _connectedDevice == null) {

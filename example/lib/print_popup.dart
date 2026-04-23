@@ -16,9 +16,7 @@ Future<void> showPrintPopup(
     isScrollControlled: true,
     useSafeArea: true,
     builder: (BuildContext context) {
-      print("======================");
-      print("titleFontSizeMm == " + titleFontSizeMm.toString());
-      print("subtitleFontSizeMm == " + subtitleFontSizeMm.toString());
+
 
       return PrintPopup(
         qrContent: qrContent,
@@ -209,13 +207,21 @@ class _PrintPopupState extends State<PrintPopup> {
         child: ElevatedButton(
           onPressed: _manager.isPrinting
               ? null
-              : () {
-                  _manager.printLabel(
-                    qrContent: widget.qrContent,
-                    title: widget.title,
-                    subtitle: widget.subtitle,
+              : () async {
+                  // _manager.printLabel(
+                  //   qrContent: widget.qrContent,
+                  //   title: widget.title,
+                  //   subtitle: widget.subtitle,
+                  //   titleFontSizeMm: widget.titleFontSizeMm,
+                  //   subtitleFontSizeMm: widget.subtitleFontSizeMm,
+                  // );
+
+                  await printManager().printQrTitleCenteredLabel(
+                    qrContent: 'https://example.com/order/10001',
+                    title: '这是一段标题，会自动换行111',
+                    labelWidthMm: 50,
+                    labelHeightMm: 30,
                     titleFontSizeMm: widget.titleFontSizeMm,
-                    subtitleFontSizeMm: widget.subtitleFontSizeMm,
                   );
                 },
           child: Text(_manager.isPrinting ? '打印中...' : '打印按钮'),

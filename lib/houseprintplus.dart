@@ -57,6 +57,22 @@ class Houseprintplus {
     );
   }
 
+  Future<void> printQrTitleCenteredLabel({
+    required String qrContent,
+    required String title,
+    double labelWidthMm = 50,
+    double labelHeightMm = 30,
+    double? titleFontSizeMm,
+  }) {
+    return HouseprintplusPlatform.instance.printQrTitleCenteredLabel(
+      qrContent: qrContent,
+      title: title,
+      labelWidthMm: labelWidthMm,
+      labelHeightMm: labelHeightMm,
+      titleFontSizeMm: titleFontSizeMm,
+    );
+  }
+
   Future<bool> cancelPrintJob() {
     return HouseprintplusPlatform.instance.cancelPrintJob();
   }

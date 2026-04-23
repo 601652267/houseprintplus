@@ -112,6 +112,30 @@ public class HouseprintplusPlugin implements
           );
           result.success(null);
           return;
+        case "printQrTitleCenteredLabel":
+          String centeredQrContent = call.argument("qrContent");
+          String centeredTitle = call.argument("title");
+          if (centeredQrContent == null) {
+            result.error("invalid_argument", "qrContent is required.", null);
+            return;
+          }
+          if (centeredTitle == null) {
+            result.error("invalid_argument", "title is required.", null);
+            return;
+          }
+
+          double centeredLabelWidthMm = getDoubleArgument(call, "labelWidthMm", 50.0d);
+          double centeredLabelHeightMm = getDoubleArgument(call, "labelHeightMm", 30.0d);
+          Double centeredTitleFontSizeMm = getNullableDoubleArgument(call, "titleFontSizeMm");
+          printManager.printQrTitleCenteredLabel(
+              centeredQrContent,
+              centeredTitle,
+              centeredLabelWidthMm,
+              centeredLabelHeightMm,
+              centeredTitleFontSizeMm
+          );
+          result.success(null);
+          return;
         case "cancelPrintJob":
           result.success(printManager.cancelPrintJob());
           return;

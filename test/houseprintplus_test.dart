@@ -59,6 +59,15 @@ class MockHouseprintplusPlatform
   }) async {}
 
   @override
+  Future<void> printQrTitleCenteredLabel({
+    required String qrContent,
+    required String title,
+    double labelWidthMm = 50,
+    double labelHeightMm = 30,
+    double? titleFontSizeMm,
+  }) async {}
+
+  @override
   Future<bool> cancelPrintJob() async => false;
 }
 

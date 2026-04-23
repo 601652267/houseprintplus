@@ -156,3 +156,16 @@ class _PrintDemoPageState extends State<PrintDemoPage> {
     );
   }
 }
+
+/*
+*
+cd /Users/zhuhaiming/Desktop/ph-app/trunk/houseprintplus
+git status
+git add .
+git commit -m "feat: adjust print layout"
+git push origin main
+*
+*
+*
+*
+* */

@@ -12,6 +12,7 @@ import android.text.TextUtils;
 import android.text.TextPaint;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.gengcon.www.jcprintersdk.JCPrintApi;
 import com.gengcon.www.jcprintersdk.callback.PrintCallback;
@@ -35,6 +36,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * left side QR code, right side title and subtitle stacked vertically.
  */
 public class HouseprintPrintManager {
+    private static final String LAYOUT_QR_WITH_SIDE_TEXT = "qr_side_text";
+    private static final String LAYOUT_QR_WITH_CENTERED_TITLE = "qr_centered_title";
 
     /**
      * Emits structured print status updates back to the plugin entrypoint.
@@ -119,6 +122,45 @@ public class HouseprintPrintManager {
                 labelHeightMm,
                 titleFontSizeMm,
                 subtitleFontSizeMm,
+                LAYOUT_QR_WITH_SIDE_TEXT,
+                settings
+        ));
+    }
+
+    /**
+     * Starts printing a vertically centered QR + title layout.
+     */
+    public void printQrTitleCenteredLabel(
+            @NonNull String qrContent,
+            @NonNull String title,
+            double labelWidthMm,
+            double labelHeightMm,
+            Double titleFontSizeMm
+    ) {
+        if (TextUtils.isEmpty(qrContent)) {
+            throw new IllegalArgumentException("QR content cannot be empty.");
+        }
+
+        if (labelWidthMm <= 0 || labelHeightMm <= 0) {
+            throw new IllegalArgumentException("Label size must be greater than zero.");
+        }
+
+        if (!bluetoothManager.isConnected() || printApi.isConnection() != 0) {
+            emitPrintStatus("error", "Printer is not connected.", buildPrintPayload(null));
+            throw new IllegalStateException("Printer is not connected.");
+        }
+
+        if (!printInProgress.compareAndSet(false, true)) {
+            throw new IllegalStateException("Another print job is already running.");
+        }
+
+        HouseprintBluetoothManager.PrinterSettings settings = bluetoothManager.getCurrentPrinterSettings();
+        executorService.execute(() -> startCenteredQrTitlePrint(
+                qrContent,
+                title,
+                labelWidthMm,
+                labelHeightMm,
+                titleFontSizeMm,
                 settings
         ));
     }
@@ -149,13 +191,17 @@ public class HouseprintPrintManager {
             double labelHeightMm,
             Double titleFontSizeMm,
             Double subtitleFontSizeMm,
+            @NonNull String layoutType,
             @NonNull HouseprintBluetoothManager.PrinterSettings settings
     ) {
         Bitmap labelBitmap = null;
         try {
-            Map<String, Object> basePayload = buildPrintPayload(settings);
-            basePayload.put("labelWidthMm", labelWidthMm);
-            basePayload.put("labelHeightMm", labelHeightMm);
+            Map<String, Object> basePayload = buildLayoutPayload(
+                    settings,
+                    labelWidthMm,
+                    labelHeightMm,
+                    layoutType
+            );
             if (titleFontSizeMm != null) {
                 basePayload.put("titleFontSizeMm", titleFontSizeMm);
             }
@@ -176,11 +222,64 @@ public class HouseprintPrintManager {
                     subtitleFontSizeMm,
                     settings
             );
-            submitBitmapForPrinting(labelBitmap, (float) labelWidthMm, (float) labelHeightMm, settings);
+            submitBitmapForPrinting(
+                    labelBitmap,
+                    (float) labelWidthMm,
+                    (float) labelHeightMm,
+                    layoutType,
+                    settings
+            );
         } catch (Exception exception) {
             recycleBitmap(labelBitmap);
             printInProgress.set(false);
-            Map<String, Object> payload = buildPrintPayload(settings);
+            Map<String, Object> payload = buildPrintPayload(settings, layoutType);
+            payload.put("error", exception.getMessage());
+            emitPrintStatus("error", "Failed to prepare the print layout.", payload);
+        }
+    }
+
+    private void startCenteredQrTitlePrint(
+            @NonNull String qrContent,
+            @NonNull String title,
+            double labelWidthMm,
+            double labelHeightMm,
+            Double titleFontSizeMm,
+            @NonNull HouseprintBluetoothManager.PrinterSettings settings
+    ) {
+        Bitmap labelBitmap = null;
+        try {
+            Map<String, Object> basePayload = buildLayoutPayload(
+                    settings,
+                    labelWidthMm,
+                    labelHeightMm,
+                    LAYOUT_QR_WITH_CENTERED_TITLE
+            );
+            if (titleFontSizeMm != null) {
+                basePayload.put("titleFontSizeMm", titleFontSizeMm);
+            }
+
+            emitPrintStatus("preparing", "Preparing print data.", basePayload);
+            emitPrintStatus("generatingQr", "Generating QR code.", basePayload);
+            emitPrintStatus("renderingLayout", "Rendering print layout.", basePayload);
+            labelBitmap = createCenteredQrTitleBitmap(
+                    qrContent,
+                    title,
+                    (float) labelWidthMm,
+                    (float) labelHeightMm,
+                    titleFontSizeMm,
+                    settings
+            );
+            submitBitmapForPrinting(
+                    labelBitmap,
+                    (float) labelWidthMm,
+                    (float) labelHeightMm,
+                    LAYOUT_QR_WITH_CENTERED_TITLE,
+                    settings
+            );
+        } catch (Exception exception) {
+            recycleBitmap(labelBitmap);
+            printInProgress.set(false);
+            Map<String, Object> payload = buildPrintPayload(settings, LAYOUT_QR_WITH_CENTERED_TITLE);
             payload.put("error", exception.getMessage());
             emitPrintStatus("error", "Failed to prepare the print layout.", payload);
         }
@@ -190,13 +289,14 @@ public class HouseprintPrintManager {
             @NonNull Bitmap labelBitmap,
             float labelWidthMm,
             float labelHeightMm,
+            @NonNull String layoutType,
             @NonNull HouseprintBluetoothManager.PrinterSettings settings
     ) {
         AtomicBoolean dataCommitted = new AtomicBoolean(false);
         AtomicBoolean finished = new AtomicBoolean(false);
 
         printApi.setTotalPrintQuantity(1);
-        emitPrintStatus("starting", "Starting print job.", buildPrintPayload(settings));
+        emitPrintStatus("starting", "Starting print job.", buildPrintPayload(settings, layoutType));
         printApi.startPrintJob(settings.getPrintDensity(), 1, settings.getPrintMode(), new PrintCallback() {
             @Override
             public void onError(int errorCode) {
@@ -212,7 +312,7 @@ public class HouseprintPrintManager {
                 recycleBitmap(labelBitmap);
                 printInProgress.set(false);
 
-                Map<String, Object> payload = buildPrintPayload(settings);
+                Map<String, Object> payload = buildPrintPayload(settings, layoutType);
                 payload.put("errorCode", errorCode);
                 payload.put("printStateCode", printStateCode);
                 emitPrintStatus("error", "Printing failed.", payload);
@@ -224,14 +324,14 @@ public class HouseprintPrintManager {
                     return;
                 }
 
-                emitPrintStatus("sending", "Sending bitmap data to printer.", buildProgressPayload(settings, pageIndex, 1));
+                emitPrintStatus("sending", "Sending bitmap data to printer.", buildProgressPayload(settings, pageIndex, 1, layoutType));
                 printApi.commitImageData(0, labelBitmap, labelWidthMm, labelHeightMm, 1, 0, 0, 0, 0, "");
                 dataCommitted.set(true);
             }
 
             @Override
             public void onProgress(int pageIndex, int quantityIndex, HashMap<String, Object> extras) {
-                emitPrintStatus("progress", "Print job is in progress.", buildProgressPayload(settings, pageIndex, quantityIndex));
+                emitPrintStatus("progress", "Print job is in progress.", buildProgressPayload(settings, pageIndex, quantityIndex, layoutType));
                 if (pageIndex < 1 || quantityIndex < 1 || !finished.compareAndSet(false, true)) {
                     return;
                 }
@@ -239,7 +339,7 @@ public class HouseprintPrintManager {
                 printApi.endPrintJob();
                 recycleBitmap(labelBitmap);
                 printInProgress.set(false);
-                emitPrintStatus("completed", "Print job completed.", buildProgressPayload(settings, pageIndex, quantityIndex));
+                emitPrintStatus("completed", "Print job completed.", buildProgressPayload(settings, pageIndex, quantityIndex, layoutType));
             }
 
             @Override
@@ -251,7 +351,7 @@ public class HouseprintPrintManager {
                 recycleBitmap(labelBitmap);
                 printInProgress.set(false);
 
-                Map<String, Object> payload = buildPrintPayload(settings);
+                Map<String, Object> payload = buildPrintPayload(settings, layoutType);
                 payload.put("cancelSuccess", success);
                 emitPrintStatus("cancelled", success ? "Print job cancelled." : "Print cancellation failed.", payload);
             }
@@ -322,6 +422,63 @@ public class HouseprintPrintManager {
         return labelBitmap;
     }
 
+    @NonNull
+    private Bitmap createCenteredQrTitleBitmap(
+            @NonNull String qrContent,
+            @NonNull String title,
+            float labelWidthMm,
+            float labelHeightMm,
+            Double titleFontSizeMm,
+            @NonNull HouseprintBluetoothManager.PrinterSettings settings
+    ) throws WriterException {
+        float multiple = settings.getPrintMultiple() > 0 ? settings.getPrintMultiple() : 8.0f;
+        int bitmapWidth = Math.max(JCPrintApi.mmToPixel(labelWidthMm, multiple), 1);
+        int bitmapHeight = Math.max(JCPrintApi.mmToPixel(labelHeightMm, multiple), 1);
+        int padding = Math.max(JCPrintApi.mmToPixel(2.0f, multiple), 12);
+        int contentWidth = Math.max(bitmapWidth - (padding * 2), 1);
+        int contentHeight = Math.max(bitmapHeight - (padding * 2), 1);
+        int lineGap = Math.max(JCPrintApi.mmToPixel(0.6f, multiple), 2);
+
+        Bitmap labelBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(labelBitmap);
+        canvas.drawColor(Color.WHITE);
+
+        TextPaint titlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        titlePaint.setColor(Color.BLACK);
+        titlePaint.setFakeBoldText(true);
+        titlePaint.setTextSize(resolveTextSize(titleFontSizeMm, bitmapHeight * 0.15f, multiple));
+
+        StaticLayout titleLayout = createStaticLayout(
+                title,
+                titlePaint,
+                contentWidth,
+                Layout.Alignment.ALIGN_CENTER
+        );
+        int maxQrSize = Math.max(contentHeight - lineGap - titleLayout.getHeight(), 1);
+        // Increase the QR code footprint for the centered layout while still
+        // leaving enough room for the title underneath.
+        int preferredQrSize = Math.min(contentWidth, Math.round(contentHeight * 0.72f));
+        int qrSize = Math.max(Math.min(preferredQrSize, maxQrSize), 1);
+
+        Bitmap qrBitmap = generateQrBitmap(qrContent, qrSize);
+        int totalBlockHeight = qrSize + lineGap + titleLayout.getHeight();
+        float blockTop = padding + Math.max((contentHeight - totalBlockHeight) / 2.0f, 0.0f);
+        float qrLeft = (bitmapWidth - qrSize) / 2.0f;
+        canvas.drawBitmap(qrBitmap, qrLeft, blockTop, null);
+        qrBitmap.recycle();
+
+        drawSingleTextLayout(
+                canvas,
+                titleLayout,
+                padding,
+                blockTop + qrSize + lineGap,
+                contentWidth,
+                padding,
+                contentHeight
+        );
+        return labelBitmap;
+    }
+
     private float resolveTextSize(Double textSizeMm, float fallbackSizePx, float printMultiple) {
         if (textSizeMm == null || textSizeMm <= 0) {
             return fallbackSizePx;
@@ -335,11 +492,21 @@ public class HouseprintPrintManager {
             @NonNull TextPaint textPaint,
             int textWidth
     ) {
+        return createStaticLayout(text, textPaint, textWidth, Layout.Alignment.ALIGN_NORMAL);
+    }
+
+    @NonNull
+    private StaticLayout createStaticLayout(
+            @NonNull String text,
+            @NonNull TextPaint textPaint,
+            int textWidth,
+            @NonNull Layout.Alignment alignment
+    ) {
         return new StaticLayout(
                 text,
                 textPaint,
                 Math.max(textWidth, 1),
-                Layout.Alignment.ALIGN_NORMAL,
+                alignment,
                 1.1f,
                 0.0f,
                 false
@@ -370,6 +537,25 @@ public class HouseprintPrintManager {
         canvas.restore();
     }
 
+    private void drawSingleTextLayout(
+            @NonNull Canvas canvas,
+            @NonNull StaticLayout textLayout,
+            int left,
+            float top,
+            int width,
+            int clipTop,
+            int clipHeight
+    ) {
+        int safeWidth = Math.max(width, 1);
+        int safeClipHeight = Math.max(clipHeight, 1);
+
+        canvas.save();
+        canvas.clipRect(left, clipTop, left + safeWidth, clipTop + safeClipHeight);
+        canvas.translate(left, top);
+        textLayout.draw(canvas);
+        canvas.restore();
+    }
+
     @NonNull
     private Bitmap generateQrBitmap(@NonNull String qrContent, int size) throws WriterException {
         Map<EncodeHintType, Object> hints = new HashMap<>();
@@ -391,9 +577,10 @@ public class HouseprintPrintManager {
     private Map<String, Object> buildProgressPayload(
             @NonNull HouseprintBluetoothManager.PrinterSettings settings,
             int pageIndex,
-            int quantityIndex
+            int quantityIndex,
+            @Nullable String layoutType
     ) {
-        Map<String, Object> payload = buildPrintPayload(settings);
+        Map<String, Object> payload = buildPrintPayload(settings, layoutType);
         payload.put("pageIndex", pageIndex);
         payload.put("quantityIndex", quantityIndex);
         return payload;
@@ -401,6 +588,14 @@ public class HouseprintPrintManager {
 
     @NonNull
     private Map<String, Object> buildPrintPayload(HouseprintBluetoothManager.PrinterSettings settings) {
+        return buildPrintPayload(settings, null);
+    }
+
+    @NonNull
+    private Map<String, Object> buildPrintPayload(
+            HouseprintBluetoothManager.PrinterSettings settings,
+            @Nullable String layoutType
+    ) {
         Map<String, Object> payload = new HashMap<>();
         HouseprintBluetoothManager.PrinterSettings safeSettings = settings != null
                 ? settings
@@ -409,6 +604,22 @@ public class HouseprintPrintManager {
         payload.put("printMode", safeSettings.getPrintMode());
         payload.put("printDensity", safeSettings.getPrintDensity());
         payload.put("printMultiple", (double) safeSettings.getPrintMultiple());
+        if (!TextUtils.isEmpty(layoutType)) {
+            payload.put("layoutType", layoutType);
+        }
+        return payload;
+    }
+
+    @NonNull
+    private Map<String, Object> buildLayoutPayload(
+            @NonNull HouseprintBluetoothManager.PrinterSettings settings,
+            double labelWidthMm,
+            double labelHeightMm,
+            @NonNull String layoutType
+    ) {
+        Map<String, Object> payload = buildPrintPayload(settings, layoutType);
+        payload.put("labelWidthMm", labelWidthMm);
+        payload.put("labelHeightMm", labelHeightMm);
         return payload;
     }
 

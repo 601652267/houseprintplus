@@ -72,6 +72,18 @@ abstract class HouseprintplusPlatform extends PlatformInterface {
     throw UnimplementedError('printQrLabel() has not been implemented.');
   }
 
+  Future<void> printQrTitleCenteredLabel({
+    required String qrContent,
+    required String title,
+    double labelWidthMm = 50,
+    double labelHeightMm = 30,
+    double? titleFontSizeMm,
+  }) {
+    throw UnimplementedError(
+      'printQrTitleCenteredLabel() has not been implemented.',
+    );
+  }
+
   Future<bool> cancelPrintJob() {
     throw UnimplementedError('cancelPrintJob() has not been implemented.');
   }

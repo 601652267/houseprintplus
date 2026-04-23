@@ -107,6 +107,26 @@ class MethodChannelHouseprintplus extends HouseprintplusPlatform {
   }
 
   @override
+  Future<void> printQrTitleCenteredLabel({
+    required String qrContent,
+    required String title,
+    double labelWidthMm = 50,
+    double labelHeightMm = 30,
+    double? titleFontSizeMm,
+  }) {
+    return methodChannel.invokeMethod<void>(
+      'printQrTitleCenteredLabel',
+      <String, dynamic>{
+        'qrContent': qrContent,
+        'title': title,
+        'labelWidthMm': labelWidthMm,
+        'labelHeightMm': labelHeightMm,
+        'titleFontSizeMm': titleFontSizeMm,
+      },
+    );
+  }
+
+  @override
   Future<bool> cancelPrintJob() async {
     return await methodChannel.invokeMethod<bool>('cancelPrintJob') ?? false;
   }
